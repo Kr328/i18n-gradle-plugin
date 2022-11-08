@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.github.kr328.gradle.i18n"
-version = "1.0.0"
+version = "1.0.1"
 
 dependencies {
     annotationProcessor("org.projectlombok:lombok:1.18.24")

@@ -29,7 +29,7 @@ public final class Parser {
             }
 
             final String keyText = (String) key;
-            if (!keyText.matches("[a-z_]+")) {
+            if (!keyText.matches("[a-z_0-9]+")) {
                 throw new ProcessorException("Unexpected key: " + key);
             }
 
