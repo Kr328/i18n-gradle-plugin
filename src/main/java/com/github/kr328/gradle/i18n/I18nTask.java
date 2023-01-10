@@ -67,6 +67,8 @@ public abstract class I18nTask extends DefaultTask {
         final FlattenTemplates root = Parser.parseDirectory(i18nPath.resolve("root"));
         final Generator generator = new Generator(root, getPackageName().get());
 
+        generator.generateDefaultFormatter(commonKtPath);
+
         generator.generateCommonKotlin(commonKtPath, false);
         if (isComposeEnabled) {
             generator.generateCommonKotlin(commonKtPath, true);

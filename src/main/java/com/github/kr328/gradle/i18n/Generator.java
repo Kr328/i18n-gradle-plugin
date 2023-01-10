@@ -20,17 +20,16 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @AllArgsConstructor
 public class Generator {
     private static final AnnotationSpec KOTLIN_FILE_ANNOTATION = AnnotationSpec.builder(Symbols.SUPPRESS)
-            .addMember("\"RedundantVisibilityModifier\", \"FunctionName\"")
+            .addMember("%S, %S, %S, %S", "RedundantVisibilityModifier", "FunctionName", "PropertyName", "RemoveExplicitTypeArguments")
             .build();
     private final FlattenTemplates root;
     private final String packageName;
 
-    private List<ParameterSpec> resolveParameters(final FlattenTemplates.Key key) {
+    private List<ParameterSpec> buildVariableParameters(final FlattenTemplates.Key key) {
         final Template template = Objects.requireNonNull(root.getTemplates().get(key));
 
         return template.getVariables().stream()
@@ -38,22 +37,38 @@ public class Generator {
                 .collect(Collectors.toList());
     }
 
-    private String buildCallFormatParameters(final FlattenTemplates.Key key) {
+    private CodeBlock buildFormatParameters(final FlattenTemplates.Key key) {
         final Template template = Objects.requireNonNull(root.getTemplates().get(key));
+        final List<String> variables = template.getVariables()
+                .stream().map(Template.Part.Variable::getName)
+                .collect(Collectors.toList());
+        final String format = String.join(",", Collections.nCopies(variables.size(), "%N"));
 
-        return template.getVariables().stream().map(Template.Part.Variable::getName).collect(Collectors.joining(","));
+        return CodeBlock.of(format, variables.toArray(Object[]::new));
     }
 
     public void generateCommonExpectKotlin(final Path path) throws IOException {
         final TypeSpec.Builder implClass = TypeSpec.expectClassBuilder(Naming.I18N_IMPL_CLASS_NAME);
 
         for (final FlattenTemplates.Key key : root.getTemplates().keySet()) {
-            implClass.addFunction(
-                    FunSpec.builder(Naming.implFunctionName(key))
-                            .addParameters(resolveParameters(key))
-                            .returns(TypeNames.STRING)
-                            .build()
-            );
+            if (buildFormatParameters(key).isNotEmpty()) {
+                final TypeVariableName returnType = TypeVariableName.get("T");
+
+                implClass.addFunction(
+                        FunSpec.builder(Naming.implFunctionName(key))
+                                .addTypeVariable(returnType)
+                                .addParameter("F", Naming.formatterName(packageName, returnType))
+                                .addParameters(buildVariableParameters(key))
+                                .returns(returnType)
+                                .build()
+                );
+            } else {
+                implClass.addFunction(
+                        FunSpec.builder(Naming.implFunctionName(key))
+                                .returns(TypeNames.STRING)
+                                .build()
+                );
+            }
         }
 
         FileSpec.builder(packageName, Naming.I18N_IMPL_CLASS_NAME)
@@ -86,34 +101,66 @@ public class Generator {
                 for (final Map.Entry<String, TreeTemplates.Child> entry : root.getChildren().entrySet()) {
                     if (entry.getValue() instanceof TreeTemplates.Child.Value) {
                         final TreeTemplates.Child.Value value = (TreeTemplates.Child.Value) entry.getValue();
-                        final List<AnnotationSpec> annotations;
-                        final CodeBlock body;
-                        if (composable) {
-                            annotations = List.of(AnnotationSpec.builder(Symbols.COMPOSABLE).build());
 
-                            final String rememberParameters = Stream.of("IMPL", buildCallFormatParameters(value.getKey()))
-                                    .filter(s -> !s.isBlank())
-                                    .collect(Collectors.joining(","));
-                            body = CodeBlock.of(
-                                    "return %M(%L) { IMPL.%N(%L) }",
-                                    Symbols.REMEMBER,
-                                    rememberParameters,
-                                    Naming.implFunctionName(value.getKey()),
-                                    buildCallFormatParameters(value.getKey())
-                            );
+                        final CodeBlock formatParameters = buildFormatParameters(value.getKey());
+                        if (formatParameters.isNotEmpty()) {
+                            final FunSpec.Builder withFormatter = FunSpec.builder(entry.getKey());
+                            final FunSpec.Builder withoutFormatter = FunSpec.builder(entry.getKey());
+
+                            final TypeVariableName returnType = TypeVariableName.get("T");
+                            final List<ParameterSpec> parameters = buildVariableParameters(value.getKey());
+
+                            withFormatter.addTypeVariable(returnType)
+                                    .addParameter("F", Naming.formatterName(packageName, returnType))
+                                    .addParameters(parameters)
+                                    .returns(returnType);
+                            withoutFormatter
+                                    .addParameters(parameters)
+                                    .returns(TypeNames.STRING)
+                                    .addCode("return %N(DefaultFormatter, %L)", entry.getKey(), formatParameters);
+
+                            if (composable) {
+                                withFormatter.addAnnotation(Symbols.COMPOSABLE);
+                                withoutFormatter.addAnnotation(Symbols.COMPOSABLE);
+
+                                withFormatter.addCode(
+                                        "return %M(IMPL, F, %L) { IMPL.%N(F, %L) }",
+                                        Symbols.REMEMBER,
+                                        formatParameters,
+                                        Naming.implFunctionName(value.getKey()),
+                                        formatParameters
+                                );
+                            } else {
+                                withFormatter.addCode(
+                                        "return IMPL.%N(F, %L)",
+                                        Naming.implFunctionName(value.getKey()),
+                                        formatParameters
+                                );
+                            }
+
+                            rootType.addFunction(withFormatter.build());
+                            rootType.addFunction(withoutFormatter.build());
                         } else {
-                            annotations = List.of();
-                            body = CodeBlock.of("return IMPL.%N(%L)", Naming.implFunctionName(value.getKey()), buildCallFormatParameters(value.getKey()));
-                        }
+                            final FunSpec.Builder fun = FunSpec.builder(entry.getKey())
+                                    .returns(TypeNames.STRING);
 
-                        rootType.addFunction(
-                                FunSpec.builder(entry.getKey())
-                                        .addAnnotations(annotations)
-                                        .addParameters(resolveParameters(value.getKey()))
-                                        .returns(TypeNames.STRING)
-                                        .addCode(body)
-                                        .build()
-                        );
+                            if (composable) {
+                                fun.addAnnotation(Symbols.COMPOSABLE);
+
+                                fun.addCode(
+                                        "return %M(IMPL) { IMPL.%N() }",
+                                        Symbols.REMEMBER,
+                                        Naming.implFunctionName(value.getKey())
+                                );
+                            } else {
+                                fun.addCode(
+                                        "return IMPL.%N()",
+                                        Naming.implFunctionName(value.getKey())
+                                );
+                            }
+
+                            rootType.addFunction(fun.build());
+                        }
                     } else if (entry.getValue() instanceof TreeTemplates.Child.Container) {
                         final TreeTemplates.Child.Container container = (TreeTemplates.Child.Container) entry.getValue();
                         final ClassName childClassName = className.nestedClass(NameUtils.snakeToCamel(entry.getKey()));
@@ -161,22 +208,29 @@ public class Generator {
                 );
 
         for (final FlattenTemplates.Key key : root.getTemplates().keySet()) {
-            final String formatParameters = buildCallFormatParameters(key);
-            final String formatCode;
-            if (formatParameters.isBlank()) {
-                formatCode = "";
+            final CodeBlock formatParameters = buildFormatParameters(key);
+
+            final FunSpec.Builder fun = FunSpec.builder(Naming.implFunctionName(key))
+                    .addModifiers(KModifier.ACTUAL);
+
+            if (formatParameters.isNotEmpty()) {
+                final TypeVariableName returnType = TypeVariableName.get("T");
+
+                fun.addTypeVariable(returnType)
+                        .addParameter("F", Naming.formatterName(packageName, returnType))
+                        .addParameters(buildVariableParameters(key))
+                        .returns(returnType)
+                        .addCode(
+                                "return F.format(RES.locale, RES.getString(%S), %L)",
+                                Naming.jvmResourceKey(key),
+                                formatParameters
+                        );
             } else {
-                formatCode = ".format(" + formatParameters + ")";
+                fun.returns(TypeNames.STRING)
+                        .addCode("return RES.getString(%S)", Naming.jvmResourceKey(key));
             }
 
-            implClass.addFunction(
-                    FunSpec.builder(Naming.implFunctionName(key))
-                            .addModifiers(KModifier.ACTUAL)
-                            .addParameters(resolveParameters(key))
-                            .returns(TypeNames.STRING)
-                            .addCode("return RES.getString(%S)%L", Naming.jvmResourceKey(key), formatCode)
-                            .build()
-            );
+            implClass.addFunction(fun.build());
         }
 
         final ClassName i18nClassName = new ClassName(packageName, Naming.I18N_CLASS_NAME);
@@ -190,12 +244,11 @@ public class Generator {
                 )
                 .returns(i18nClassName)
                 .addCode(
-                        "return %T(%T(%T.getBundle(%S, locale, %T::class.java.module)))",
+                        "return %T(%T(%T.getBundle(%S, locale)))",
                         i18nClassName,
                         i18nImplClassName,
                         Symbols.RESOURCE_BUNDLE,
-                        String.join(".", packageName, Naming.JVM_RESOURCE_BUNDLE_NAME),
-                        i18nImplClassName
+                        String.join(".", packageName, Naming.JVM_RESOURCE_BUNDLE_NAME)
                 )
                 .build();
         final FunSpec createI18nComposableFunc = FunSpec.builder("createI18nComposable")
@@ -206,12 +259,11 @@ public class Generator {
                 )
                 .returns(i18nComposableName)
                 .addCode(
-                        "return %T(%T(%T.getBundle(%S, locale, %T::class.java.module)))",
+                        "return %T(%T(%T.getBundle(%S, locale)))",
                         i18nComposableName,
                         i18nImplClassName,
                         Symbols.RESOURCE_BUNDLE,
-                        String.join(".", packageName, Naming.JVM_RESOURCE_BUNDLE_NAME),
-                        i18nImplClassName
+                        String.join(".", packageName, Naming.JVM_RESOURCE_BUNDLE_NAME)
                 )
                 .build();
 
@@ -240,37 +292,48 @@ public class Generator {
                 );
 
         for (final FlattenTemplates.Key key : root.getTemplates().keySet()) {
-            final String getStringParameters = Stream.of("R.string." + Naming.androidResourceKey(key), buildCallFormatParameters(key))
-                    .filter(s -> !s.isBlank())
-                    .collect(Collectors.joining(","));
+            final CodeBlock formatParameters = buildFormatParameters(key);
 
-            implClass.addFunction(
-                    FunSpec.builder(Naming.implFunctionName(key))
-                            .addModifiers(KModifier.ACTUAL)
-                            .addParameters(resolveParameters(key))
-                            .returns(TypeNames.STRING)
-                            .addCode("return RES.getString(%L)", getStringParameters)
-                            .build()
-            );
+            final FunSpec.Builder fun = FunSpec.builder(Naming.implFunctionName(key))
+                    .addModifiers(KModifier.ACTUAL);
+
+            if (formatParameters.isNotEmpty()) {
+                final TypeVariableName returnType = TypeVariableName.get("T");
+
+                fun.addTypeVariable(returnType)
+                        .addParameter("F", Naming.formatterName(packageName, returnType))
+                        .returns(returnType)
+                        .addParameters(buildVariableParameters(key))
+                        .addCode(
+                                "return F.format(RES.configuration.locales[0], RES.getString(R.string.%N), %L)",
+                                Naming.androidResourceKey(key),
+                                formatParameters
+                        );
+            } else {
+                fun.returns(TypeNames.STRING)
+                        .addCode("return RES.getString(R.string.%N)", Naming.androidResourceKey(key));
+            }
+
+            implClass.addFunction(fun.build());
         }
 
         final ClassName i18nClassName = new ClassName(packageName, Naming.I18N_CLASS_NAME);
         final ClassName i18nComposableName = new ClassName(packageName, Naming.I18N_COMPOSABLE_CLASS_NAME);
         final ClassName i18nImplClassName = new ClassName(packageName, Naming.I18N_IMPL_CLASS_NAME);
         final FunSpec createI18nFunc = FunSpec.builder("createI18n")
-                .addParameter("resource", Symbols.RESOURCES)
+                .addParameter("resources", Symbols.RESOURCES)
                 .returns(i18nClassName)
                 .addCode(
-                        "return %T(%T(resource))",
+                        "return %T(%T(resources))",
                         i18nClassName,
                         i18nImplClassName
                 )
                 .build();
         final FunSpec createI18nComposableFunc = FunSpec.builder("createI18nComposable")
-                .addParameter("resource", Symbols.RESOURCES)
+                .addParameter("resources", Symbols.RESOURCES)
                 .returns(i18nComposableName)
                 .addCode(
-                        "return %T(%T(resource))",
+                        "return %T(%T(resources))",
                         i18nComposableName,
                         i18nImplClassName
                 )
@@ -360,5 +423,40 @@ public class Generator {
             transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
             transformer.transform(new DOMSource(document), new StreamResult(stream));
         }
+    }
+
+    public void generateDefaultFormatter(final Path path) throws IOException {
+        final TypeVariableName returnType = TypeVariableName.get("T");
+
+        final TypeSpec formatter = TypeSpec.funInterfaceBuilder("Formatter")
+                .addTypeVariable(returnType)
+                .addFunction(
+                        FunSpec.builder("format")
+                                .addModifiers(KModifier.ABSTRACT)
+                                .addParameter("locale", Symbols.LOCALE)
+                                .addParameter("format", TypeNames.STRING)
+                                .addParameter(
+                                        ParameterSpec.builder("args", TypeNames.ANY.copy(true, List.of()))
+                                                .addModifiers(KModifier.VARARG)
+                                                .build()
+                                )
+                                .returns(returnType)
+                                .build()
+                ).build();
+
+        final PropertySpec defaultFormatter = PropertySpec.builder(
+                "DefaultFormatter",
+                Naming.formatterName(packageName, TypeNames.STRING)
+        ).initializer(
+                "%T { locale, format, args -> String.format(locale, format, *args) }",
+                Naming.formatterName(packageName, TypeNames.STRING)
+        ).build();
+
+        FileSpec.builder(packageName, "Formatter")
+                .addAnnotation(KOTLIN_FILE_ANNOTATION)
+                .addType(formatter)
+                .addProperty(defaultFormatter)
+                .build()
+                .writeTo(path);
     }
 }

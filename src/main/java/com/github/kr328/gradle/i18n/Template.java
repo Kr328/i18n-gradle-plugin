@@ -191,7 +191,7 @@ public class Template {
                 public TypeName kotlinType() {
                     switch (this) {
                         case String: {
-                            return TypeNames.STRING;
+                            return TypeNames.CHAR_SEQUENCE;
                         }
                         case Decimal:
                         case Octal:

@@ -13,8 +13,6 @@ public final class Symbols {
     public static final ClassName JVM_INLINE = new ClassName("kotlin.jvm", "JvmInline");
     public static final ClassName RESOURCES = new ClassName("android.content.res", "Resources");
     public static final ClassName RESOURCE_BUNDLE = ClassNames.get(ResourceBundle.class);
-    public static final ClassName CLASS_LOADER = ClassNames.get(ClassLoader.class);
     public static final ClassName LOCALE = ClassNames.get(Locale.class);
-    public static final ClassName MODULE = ClassNames.get(Module.class);
     public static final MemberName REMEMBER = new MemberName("androidx.compose.runtime", "remember", true);
 }
