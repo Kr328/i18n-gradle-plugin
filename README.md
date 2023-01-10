@@ -23,7 +23,7 @@ build.gradle.kts
 ```kotlin
 plugins {
     kotlin("multiplatform")
-    id("com.github.kr328.gradle.i18n") version "1.0.0"
+    id("com.github.kr328.gradle.i18n") version "1.0.2"
     // ...
 }
 ```
@@ -74,8 +74,13 @@ strings: # root element
 ### Using generated code
 
 ```kotlin
-val i18n = createI18n(...) 
-
+// Non Jetpack Compose
+val i18n = createI18n(...)
+        
 println(i18n.i18n_text())
 println(i18n.container.i18n_with_format_text(1L, "114514", 0.2))
+
+// Jetpack Compose
+val i18nComposable = createI18nComposable(...)
+Text(i18nComposable.i18n_text())
 ```
