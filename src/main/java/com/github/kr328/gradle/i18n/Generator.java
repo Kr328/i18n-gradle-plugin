@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 public class Generator {
     private static final AnnotationSpec KOTLIN_FILE_ANNOTATION = AnnotationSpec.builder(Symbols.SUPPRESS)
-            .addMember("%S, %S, %S, %S", "RedundantVisibilityModifier", "FunctionName", "PropertyName", "RemoveExplicitTypeArguments")
+            .addMember("%S, %S, %S, %S, %S", "RedundantVisibilityModifier", "FunctionName", "PropertyName", "RemoveExplicitTypeArguments", "MemberVisibilityCanBePrivate")
             .build();
     private final FlattenTemplates root;
     private final String packageName;
@@ -88,7 +88,6 @@ public class Generator {
                         .addAnnotation(Symbols.JVM_INLINE)
                         .addProperty(
                                 PropertySpec.builder("IMPL", implClassName)
-                                        .addModifiers(KModifier.PRIVATE)
                                         .initializer("IMPL")
                                         .build()
                         )
@@ -197,7 +196,6 @@ public class Generator {
                 .addModifiers(KModifier.ACTUAL)
                 .addProperty(
                         PropertySpec.builder("RES", Symbols.RESOURCE_BUNDLE)
-                                .addModifiers(KModifier.PRIVATE)
                                 .initializer("RES")
                                 .build()
                 )
@@ -281,7 +279,6 @@ public class Generator {
                 .addModifiers(KModifier.ACTUAL)
                 .addProperty(
                         PropertySpec.builder("RES", Symbols.RESOURCES)
-                                .addModifiers(KModifier.PRIVATE)
                                 .initializer("RES")
                                 .build()
                 )
@@ -355,7 +352,7 @@ public class Generator {
                 builder.append(((Template.Part.Literal) part).getText());
             } else if (part instanceof Template.Part.Variable) {
                 final Template.Part.Variable variable = (Template.Part.Variable) part;
-                int index = root.getTemplates().get(key).getVariables().indexOf(variable);
+                final int index = root.getTemplates().get(key).getVariables().indexOf(variable);
                 if (index < 0) {
                     throw new ProcessorException("Variable " + variable + " not found in root " + key);
                 }

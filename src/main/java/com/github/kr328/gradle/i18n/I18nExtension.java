@@ -20,7 +20,7 @@ public abstract class I18nExtension {
     @Nonnull
     public abstract NamedDomainObjectContainer<Language> getLanguages();
 
-    public void languages(@Nonnull Action<NamedDomainObjectContainer<Language>> action) {
+    public void languages(@Nonnull final Action<NamedDomainObjectContainer<Language>> action) {
         action.execute(getLanguages());
     }
 }

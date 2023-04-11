@@ -9,6 +9,7 @@ import org.gradle.api.tasks.InputDirectory;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 public abstract class I18nTask extends DefaultTask {
@@ -87,7 +88,12 @@ public abstract class I18nTask extends DefaultTask {
         }
 
         for (final Language language : getLanguages().get()) {
-            final FlattenTemplates current = Parser.parseDirectory(i18nPath.resolve(language.getName()));
+            final Path path = i18nPath.resolve(language.getName());
+            if (!Files.exists(path)) {
+                continue;
+            }
+
+            final FlattenTemplates current = Parser.parseDirectory(path);
             if (isJvmEnabled) {
                 final String jvmLanguageTag = language.getJvmLanguageTag();
                 if (jvmLanguageTag == null) {

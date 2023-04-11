@@ -90,7 +90,7 @@ public class Template {
                         if (format.equals(String.format(Locale.ROOT, format, testing))) {
                             throw new ProcessorException("Invalid format " + format + " of " + builder);
                         }
-                    } catch (IllegalFormatException e) {
+                    } catch (final IllegalFormatException e) {
                         throw new ProcessorException("Invalid format " + format + " of " + builder, e);
                     }
 

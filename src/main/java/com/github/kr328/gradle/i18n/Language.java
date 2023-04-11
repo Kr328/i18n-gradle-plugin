@@ -15,7 +15,7 @@ public class Language implements Serializable {
     @Nullable
     private String androidLanguageTag;
 
-    public Language(@Nonnull String name) {
+    public Language(@Nonnull final String name) {
         this.name = name;
 
         if ("root".equals(name)) {
