@@ -8,14 +8,14 @@ group = "com.github.kr328.gradle.i18n"
 version = "1.0.2"
 
 dependencies {
-    annotationProcessor("org.projectlombok:lombok:1.18.24")
-    compileOnly("org.projectlombok:lombok:1.18.24")
+    annotationProcessor("org.projectlombok:lombok:1.18.26")
+    compileOnly("org.projectlombok:lombok:1.18.26")
 
-    compileOnly("com.android.tools.build:gradle:7.3.1")
-    compileOnly(kotlin("gradle-plugin", version = "1.8.0"))
+    compileOnly("com.android.tools.build:gradle:7.4.2")
+    compileOnly(kotlin("gradle-plugin", version = "1.8.20"))
 
-    implementation("com.squareup:kotlinpoet:1.12.0")
-    implementation("org.yaml:snakeyaml:1.33")
+    implementation("com.squareup:kotlinpoet:1.13.0")
+    implementation("org.yaml:snakeyaml:2.0")
 }
 
 java {
