@@ -5,16 +5,16 @@ plugins {
 }
 
 group = "com.github.kr328.gradle.i18n"
-version = "1.0.3"
+version = "1.0.4"
 
 dependencies {
     annotationProcessor("org.projectlombok:lombok:1.18.26")
     compileOnly("org.projectlombok:lombok:1.18.26")
 
-    compileOnly("com.android.tools.build:gradle:7.4.2")
+    compileOnly("com.android.tools.build:gradle:8.0.1")
     compileOnly(kotlin("gradle-plugin", version = "1.8.20"))
 
-    implementation("com.squareup:kotlinpoet:1.13.0")
+    implementation("com.squareup:kotlinpoet:1.13.2")
     implementation("org.yaml:snakeyaml:2.0")
 }
 

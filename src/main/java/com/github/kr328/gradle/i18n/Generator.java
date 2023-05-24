@@ -396,7 +396,7 @@ public class Generator {
                     .orElseGet(() -> root.getTemplates().get(key));
 
             final Element string = document.createElement("string");
-            string.setTextContent(createFormatTextFromTemplate(key, template));
+            string.setTextContent(createFormatTextFromTemplate(key, template).replace("\n", "\\n"));
             string.setAttribute("name", Naming.androidResourceKey(key));
             resources.appendChild(string);
         }
